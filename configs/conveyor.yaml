@@ -1,0 +1,19 @@
+# Specific configuration for bottling / canning conveyor lines
+
+system:
+  environment: "bottling_plant"
+
+conveyor:
+  belt_speed_m_per_s: 0.8
+  camera_resolution: [1280, 720]
+  expected_items: ["bottle", "can"]
+
+detector:
+  confidence_threshold: 0.40
+  iou_threshold: 0.40
+
+counting:
+  line_name: "capping_station_exit"
+  p1: [100.0, 400.0]
+  p2: [1180.0, 400.0]
+  direction: "incoming"

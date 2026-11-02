@@ -1,0 +1,33 @@
+# LineCount AI — Default Industrial Tracking Configuration
+
+system:
+  name: "LineCount AI"
+  device: "auto"
+  seed: 42
+
+detector:
+  model_weights: "yolov8n.pt"
+  confidence_threshold: 0.35
+  iou_threshold: 0.45
+  filter_classes: null  # null tracks all detectable classes
+
+tracker:
+  algorithm: "sort_kalman"
+  max_age: 20          # frames before dropping lost track
+  min_hits: 2          # required detection frames before confirmation
+  iou_threshold: 0.30  # Hungarian association threshold
+
+counting:
+  line_name: "conveyor_belt_gate_1"
+  p1: [0.0, 360.0]     # start of virtual inspection line (x1, y1)
+  p2: [1280.0, 360.0]  # end of virtual inspection line (x2, y2)
+  direction: "any"     # 'any', 'incoming', or 'outgoing'
+
+throughput:
+  rolling_window_seconds: 60.0
+
+visualization:
+  line_thickness: 2
+  font_scale: 0.55
+  show_trajectory: true
+  trajectory_length: 30

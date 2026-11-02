@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Weights & Models
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Datasets & Large Media
+data/*.mp4
+data/*.avi
+data/*.mkv
+data/**/*.jpg
+data/**/*.png
+outputs/*.mp4
+outputs/*.avi
+
+# IDE
+.vscode/
+.idea/
+
+# Environment secrets
+.env
+.env.*
+
+# Logs
+*.log
+.pytest_cache/
