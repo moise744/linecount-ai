@@ -31,8 +31,8 @@ except ImportError:
 # Conditional import of LineCount modules
 # ---------------------------------------------------------------------------
 try:
-    from linecount.detection.detector import ObjectDetector
-    from linecount.tracking.tracker import ByteTracker
+    from linecount.detection.detector import ObjectDetector, Detection
+    from linecount.tracking.tracker import ByteTracker, Track
     from linecount.counting.counter import LineCrossingCounter
     _LINECOUNT_AVAILABLE = True
 except ImportError:
@@ -67,7 +67,6 @@ if _FASTAPI_AVAILABLE:
     # Global model state
     # -----------------------------------------------------------------------
     _detector: Optional[Any] = None
-    _tracker: Optional[Any] = None
 
     def _get_detector() -> Any:
         global _detector
@@ -77,7 +76,7 @@ if _FASTAPI_AVAILABLE:
                     status_code=503,
                     detail="LineCount modules not installed. Run `pip install -e .`",
                 )
-            _detector = ObjectDetector(model_name="yolov8n.pt", conf_threshold=0.25)
+            _detector = ObjectDetector(model_name_or_path="yolov8n.pt", confidence_threshold=0.25)
         return _detector
 
     def _decode_image(upload_bytes: bytes) -> np.ndarray:
@@ -89,6 +88,34 @@ if _FASTAPI_AVAILABLE:
         if frame is None:
             raise HTTPException(status_code=400, detail="Could not decode image.")
         return frame
+
+    def _detection_to_dict(d: Any) -> Dict[str, Any]:
+        """Convert a Detection dataclass or dict to a uniform dictionary."""
+        if isinstance(d, dict):
+            bbox = d.get("bbox", [0, 0, 0, 0])
+            return {
+                "class_id": int(d.get("class_id", -1)),
+                "class_name": str(d.get("class_name", "unknown")),
+                "confidence": round(float(d.get("conf", d.get("confidence", 0.0))), 4),
+                "bbox": {
+                    "x1": round(float(bbox[0]), 2),
+                    "y1": round(float(bbox[1]), 2),
+                    "x2": round(float(bbox[2]), 2),
+                    "y2": round(float(bbox[3]), 2),
+                },
+            }
+        # Detection object
+        return {
+            "class_id": int(getattr(d, "class_id", -1)),
+            "class_name": str(getattr(d, "class_name", "unknown")),
+            "confidence": round(float(getattr(d, "confidence", 0.0)), 4),
+            "bbox": {
+                "x1": round(float(d.x1 if hasattr(d, "x1") else d.bbox[0]), 2),
+                "y1": round(float(d.y1 if hasattr(d, "y1") else d.bbox[1]), 2),
+                "x2": round(float(d.x2 if hasattr(d, "x2") else d.bbox[2]), 2),
+                "y2": round(float(d.y2 if hasattr(d, "y2") else d.bbox[3]), 2),
+            },
+        }
 
     # -----------------------------------------------------------------------
     # Endpoints
@@ -116,6 +143,7 @@ if _FASTAPI_AVAILABLE:
         Returns a list of detected objects with bounding boxes, class names, and confidence scores.
         """
         detector = _get_detector()
+        detector.conf_thresh = conf_threshold
         image_bytes = await file.read()
         frame = _decode_image(image_bytes)
 
@@ -125,20 +153,7 @@ if _FASTAPI_AVAILABLE:
             "filename": file.filename,
             "image_shape": {"height": frame.shape[0], "width": frame.shape[1]},
             "detection_count": len(detections),
-            "detections": [
-                {
-                    "class_id": int(d.get("class_id", -1)),
-                    "class_name": str(d.get("class_name", "unknown")),
-                    "confidence": float(d.get("conf", d.get("confidence", 0.0))),
-                    "bbox": {
-                        "x1": float(d["bbox"][0]),
-                        "y1": float(d["bbox"][1]),
-                        "x2": float(d["bbox"][2]),
-                        "y2": float(d["bbox"][3]),
-                    },
-                }
-                for d in detections
-            ],
+            "detections": [_detection_to_dict(d) for d in detections],
         })
 
     @app.post("/count/image", summary="Count objects in a single image")
@@ -153,6 +168,7 @@ if _FASTAPI_AVAILABLE:
         This endpoint returns simple frame-level object counts.
         """
         detector = _get_detector()
+        detector.conf_thresh = conf_threshold
         image_bytes = await file.read()
         frame = _decode_image(image_bytes)
 
@@ -161,7 +177,7 @@ if _FASTAPI_AVAILABLE:
         # Count per class
         class_counts: Dict[str, int] = {}
         for d in detections:
-            name = str(d.get("class_name", "unknown"))
+            name = str(d.get("class_name", "unknown") if isinstance(d, dict) else getattr(d, "class_name", "unknown"))
             class_counts[name] = class_counts.get(name, 0) + 1
 
         return JSONResponse(content={
@@ -215,6 +231,7 @@ if _FASTAPI_AVAILABLE:
         p2 = (int(line_x2 * width), int(line_y2 * height))
 
         detector = _get_detector()
+        detector.conf_thresh = conf_threshold
         tracker = ByteTracker(max_age=30, min_hits=3, iou_threshold=0.3)
         counter = LineCrossingCounter(line_start=p1, line_end=p2)
 
@@ -232,7 +249,7 @@ if _FASTAPI_AVAILABLE:
         Path(tmp_path).unlink(missing_ok=True)
 
         counts = counter.get_counts()
-        total_count = sum(counts.values()) if counts else counter.count if hasattr(counter, "count") else 0
+        total_count = sum(counts.values()) if counts else (counter.count if hasattr(counter, "count") else 0)
 
         return JSONResponse(content={
             "filename": file.filename,

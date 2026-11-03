@@ -211,3 +211,8 @@ class ObjectTracker:
         self.trackers.clear()
         self.meta.clear()
         self.frame_count = 0
+
+
+# Alias for compatibility with ByteTrack references
+ByteTracker = ObjectTracker
+
